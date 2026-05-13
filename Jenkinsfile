@@ -74,15 +74,21 @@ pipeline {
         /* ---------------- OWASP SCAN ---------------- */
 
         stage('OWASP Dependency Check') {
-            steps {
-                dependencyCheck additionalArguments:
-                '--scan ./ --disableYarnAudit --disableNodeAudit',
-                odcInstallation: 'DP-Check'
+    steps {
+        dependencyCheck(
+            odcInstallation: 'DP-Check',
+            additionalArguments: '''
+            --scan bookmyshow-app
+            --exclude **/node_modules/**
+            --format XML
+            '''
+        )
 
-                dependencyCheckPublisher pattern:
-                '**/dependency-check-report.xml'
-            }
-        }
+        dependencyCheckPublisher(
+            pattern: '**/dependency-check-report.xml'
+        )
+    }
+}
 
         /* ---------------- TRIVY SCAN ---------------- */
 
