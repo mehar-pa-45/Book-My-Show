@@ -27,18 +27,19 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQube-Scanner') {
-                    sh '''
-                    $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectName=BMS \
-                    -Dsonar.projectKey=BMS
-                    '''
-                }
-            }
+stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube-Scanner') {
+            sh '''
+            sonar-scanner \
+            -Dsonar.projectName=BMS \
+            -Dsonar.projectKey=BMS \
+            -Dsonar.sources=. \
+            -Dsonar.tests=.
+            '''
         }
-
+    }
+}
         stage('Quality Gate') {
             steps {
                 waitForQualityGate abortPipeline: false,
