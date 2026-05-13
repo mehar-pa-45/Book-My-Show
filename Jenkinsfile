@@ -153,7 +153,7 @@ pipeline {
                 Build Number: ${env.BUILD_NUMBER}<br/>
                 Build URL: ${env.BUILD_URL}<br/>
                 """,
-                to: 'msan8795@gmail.com',
+                to: 'prsam.789@gmail.com',
                 attachmentsPattern: 'trivyfs.txt'
             )
         }
