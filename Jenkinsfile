@@ -22,12 +22,10 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/mehar-pa-45/Book-My-Show.git'
+                url: 'https://github.com/mehar-pa-45/Book-My-Show.git'
                 sh 'ls -la'
             }
         }
-
-        /* ---------------- INSTALL DEPENDENCIES ---------------- */
 
         stage('Install Dependencies') {
             steps {
@@ -35,6 +33,7 @@ pipeline {
                 cd bookmyshow-app
 
                 if [ -f package.json ]; then
+                    echo "Installing dependencies..."
                     rm -rf node_modules package-lock.json
                     npm install
                 else
@@ -45,52 +44,51 @@ pipeline {
             }
         }
 
-        /* ---------------- SONARQUBE ANALYSIS ---------------- */
+        /* ================= SONARQUBE ================= */
 
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    def scannerHome = tool 'sonar-scanner'
                     withSonarQubeEnv('SonarQube-Scanner') {
                         sh """
-                        ${scannerHome}/bin/sonar-scanner \
+                        ${SCANNER_HOME}/bin/sonar-scanner \
                         -Dsonar.projectName=BMS \
                         -Dsonar.projectKey=BMS \
-                        -Dsonar.sources=bookmyshow-app
+                        -Dsonar.sources=bookmyshow-app \
+                        -Dsonar.exclusions=**/node_modules/**
                         """
                     }
                 }
             }
         }
 
-        /* ---------------- QUALITY GATE ---------------- */
-
         stage('Quality Gate') {
             steps {
-                waitForQualityGate abortPipeline: false
+                timeout(time: 3, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
             }
         }
 
-        /* ---------------- OWASP SCAN ---------------- */
+        /* ================= OWASP ================= */
 
         stage('OWASP Dependency Check') {
-    steps {
-        dependencyCheck(
-            odcInstallation: 'DP-Check',
-            additionalArguments: '''
-            --scan bookmyshow-app
-            --exclude **/node_modules/**
-            --format XML
-            '''
-        )
+            steps {
+                dependencyCheck(
+                    odcInstallation: 'DP-Check',
+                    additionalArguments: '''
+                    --scan bookmyshow-app
+                    --exclude **/node_modules/**
+                    '''
+                )
 
-        dependencyCheckPublisher(
-            pattern: '**/dependency-check-report.xml'
-        )
-    }
-}
+                dependencyCheckPublisher(
+                    pattern: '**/dependency-check-report.xml'
+                )
+            }
+        }
 
-        /* ---------------- TRIVY SCAN ---------------- */
+        /* ================= TRIVY ================= */
 
         stage('Trivy File Scan') {
             steps {
@@ -98,12 +96,13 @@ pipeline {
             }
         }
 
-        /* ---------------- DOCKER BUILD ---------------- */
+        /* ================= DOCKER ================= */
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+
                         sh '''
                         echo "Building Docker image..."
                         docker build --no-cache \
@@ -118,7 +117,7 @@ pipeline {
             }
         }
 
-        /* ---------------- DEPLOY CONTAINER ---------------- */
+        /* ================= DEPLOY ================= */
 
         stage('Deploy Container') {
             steps {
@@ -135,25 +134,28 @@ pipeline {
                 $DOCKER_IMAGE
 
                 sleep 10
+                docker ps -a
                 docker logs bms
                 '''
             }
         }
     }
 
-    /* ---------------- POST ACTION ---------------- */
+    /* ================= EMAIL ================= */
 
     post {
         always {
-            emailext attachLog: true,
-                subject: "${currentBuild.result}",
+            emailext(
+                attachLog: true,
+                subject: "${currentBuild.result}: ${env.JOB_NAME}",
                 body: """
-                Project: ${env.JOB_NAME}
-                Build Number: ${env.BUILD_NUMBER}
-                URL: ${env.BUILD_URL}
+                Project: ${env.JOB_NAME}<br/>
+                Build Number: ${env.BUILD_NUMBER}<br/>
+                Build URL: ${env.BUILD_URL}<br/>
                 """,
                 to: 'msan8795@gmail.com',
                 attachmentsPattern: 'trivyfs.txt'
+            )
         }
     }
 }
