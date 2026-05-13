@@ -23,10 +23,11 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/mehar-pa-45/Book-My-Show.git'
-
                 sh 'ls -la'
             }
         }
+
+        /* ---------------- INSTALL DEPENDENCIES ---------------- */
 
         stage('Install Dependencies') {
             steps {
@@ -44,20 +45,25 @@ pipeline {
             }
         }
 
-        /* ================= SONAR ANALYSIS ================= */
+        /* ---------------- SONARQUBE ANALYSIS ---------------- */
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube-Scanner') {
-                    sh """
-                    ${SCANNER_HOME}/bin/sonar-scanner \
-                    -Dsonar.projectName=BMS \
-                    -Dsonar.projectKey=BMS \
-                    -Dsonar.sources=bookmyshow-app
-                    """
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('SonarQube-Scanner') {
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectName=BMS \
+                        -Dsonar.projectKey=BMS \
+                        -Dsonar.sources=bookmyshow-app
+                        """
+                    }
                 }
             }
         }
+
+        /* ---------------- QUALITY GATE ---------------- */
 
         stage('Quality Gate') {
             steps {
@@ -65,7 +71,7 @@ pipeline {
             }
         }
 
-        /* ================= SECURITY SCANS ================= */
+        /* ---------------- OWASP SCAN ---------------- */
 
         stage('OWASP Dependency Check') {
             steps {
@@ -78,19 +84,20 @@ pipeline {
             }
         }
 
+        /* ---------------- TRIVY SCAN ---------------- */
+
         stage('Trivy File Scan') {
             steps {
                 sh 'trivy fs . > trivyfs.txt'
             }
         }
 
-        /* ================= DOCKER ================= */
+        /* ---------------- DOCKER BUILD ---------------- */
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-
                         sh '''
                         echo "Building Docker image..."
                         docker build --no-cache \
@@ -105,14 +112,16 @@ pipeline {
             }
         }
 
-        /* ================= DEPLOY ================= */
+        /* ---------------- DEPLOY CONTAINER ---------------- */
 
         stage('Deploy Container') {
             steps {
                 sh '''
+                echo "Stopping old container..."
                 docker stop bms || true
                 docker rm bms || true
 
+                echo "Running new container..."
                 docker run -d \
                 --name bms \
                 --restart=always \
@@ -120,21 +129,22 @@ pipeline {
                 $DOCKER_IMAGE
 
                 sleep 10
-                docker ps -a
                 docker logs bms
                 '''
             }
         }
     }
 
+    /* ---------------- POST ACTION ---------------- */
+
     post {
         always {
             emailext attachLog: true,
-                subject: "'${currentBuild.result}'",
+                subject: "${currentBuild.result}",
                 body: """
-                Project: ${env.JOB_NAME}<br/>
-                Build Number: ${env.BUILD_NUMBER}<br/>
-                URL: ${env.BUILD_URL}<br/>
+                Project: ${env.JOB_NAME}
+                Build Number: ${env.BUILD_NUMBER}
+                URL: ${env.BUILD_URL}
                 """,
                 to: 'msan8795@gmail.com',
                 attachmentsPattern: 'trivyfs.txt'
