@@ -78,7 +78,7 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'Docker-CRED', toolName: 'docker') {
+                    withDockerRegistry(credentialsId: 'Docker-CRED', toolName: 'Docker') {
                         sh '''
                         docker build -t mehardocker45/bms:latest -f bookmyshow-app/Dockerfile bookmyshow-app
                         docker push mehardocker45/bms:latest
