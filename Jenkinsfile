@@ -23,15 +23,8 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/mehar-pa-45/Book-My-Show.git'
+
                 sh 'ls -la'
-            }
-        }
-
-
-        stage('Quality Gate') {
-            steps {
-                waitForQualityGate abortPipeline: false,
-                credentialsId: 'Sonar-token'
             }
         }
 
@@ -40,22 +33,7 @@ pipeline {
                 sh '''
                 cd bookmyshow-app
 
-  stage('SonarQube Analysis') {
-    steps {
-        script {
-            def scannerHome = tool 'sonar-scanner'
-            withSonarQubeEnv('SonarQube-Scanner') {
-                sh """
-                ${scannerHome}/bin/sonar-scanner \
-                -Dsonar.projectName=BMS \
-                -Dsonar.projectKey=BMS \
-                -Dsonar.sources=. \
-                -Dsonar.tests=.
-                """
-            }
-        }
-    }
-}              if [ -f package.json ]; then
+                if [ -f package.json ]; then
                     rm -rf node_modules package-lock.json
                     npm install
                 else
@@ -65,6 +43,29 @@ pipeline {
                 '''
             }
         }
+
+        /* ================= SONAR ANALYSIS ================= */
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube-Scanner') {
+                    sh """
+                    ${SCANNER_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectName=BMS \
+                    -Dsonar.projectKey=BMS \
+                    -Dsonar.sources=bookmyshow-app
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                waitForQualityGate abortPipeline: false
+            }
+        }
+
+        /* ================= SECURITY SCANS ================= */
 
         stage('OWASP Dependency Check') {
             steps {
@@ -82,6 +83,8 @@ pipeline {
                 sh 'trivy fs . > trivyfs.txt'
             }
         }
+
+        /* ================= DOCKER ================= */
 
         stage('Docker Build & Push') {
             steps {
@@ -102,26 +105,22 @@ pipeline {
             }
         }
 
+        /* ================= DEPLOY ================= */
+
         stage('Deploy Container') {
             steps {
                 sh '''
-                echo "Stopping old container..."
                 docker stop bms || true
                 docker rm bms || true
 
-                echo "Running new container..."
                 docker run -d \
                 --name bms \
                 --restart=always \
                 -p 3000:3000 \
                 $DOCKER_IMAGE
 
-                echo "Running containers:"
-                docker ps -a
-
-                echo "Waiting for application startup..."
                 sleep 10
-
+                docker ps -a
                 docker logs bms
                 '''
             }
