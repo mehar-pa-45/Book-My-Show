@@ -27,19 +27,7 @@ pipeline {
             }
         }
 
-stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube-Scanner') {
-            sh '''
-            sonar-scanner \
-            -Dsonar.projectName=BMS \
-            -Dsonar.projectKey=BMS \
-            -Dsonar.sources=. \
-            -Dsonar.tests=.
-            '''
-        }
-    }
-}
+
         stage('Quality Gate') {
             steps {
                 waitForQualityGate abortPipeline: false,
@@ -52,7 +40,22 @@ stage('SonarQube Analysis') {
                 sh '''
                 cd bookmyshow-app
 
-                if [ -f package.json ]; then
+  stage('SonarQube Analysis') {
+    steps {
+        script {
+            def scannerHome = tool 'sonar-scanner'
+            withSonarQubeEnv('SonarQube-Scanner') {
+                sh """
+                ${scannerHome}/bin/sonar-scanner \
+                -Dsonar.projectName=BMS \
+                -Dsonar.projectKey=BMS \
+                -Dsonar.sources=. \
+                -Dsonar.tests=.
+                """
+            }
+        }
+    }
+}              if [ -f package.json ]; then
                     rm -rf node_modules package-lock.json
                     npm install
                 else
