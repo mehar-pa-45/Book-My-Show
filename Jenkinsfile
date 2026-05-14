@@ -14,22 +14,26 @@ pipeline {
 
     stages {
 
+        // ---------- CLEAN ----------
         stage('Clean Workspace') {
             steps { cleanWs() }
         }
 
+        // ---------- CHECKOUT ----------
         stage('Checkout Code') {
             steps {
                 git url: 'https://github.com/mehar-pa-45/Book-My-Show.git', branch: 'main'
             }
         }
 
+        // ---------- INSTALL ----------
         stage('Install Dependencies') {
             steps {
                 sh 'cd bookmyshow-app && npm install'
             }
         }
 
+        // ---------- SONAR ----------
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube-Scanner') {
@@ -44,10 +48,11 @@ pipeline {
             }
         }
 
+        // ---------- QUALITY GATE ----------
         stage('Quality Gate') {
             steps {
                 script {
-                    timeout(time: 3, unit: 'MINUTES') {
+                    timeout(time: 5, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         echo "Quality Gate Status: ${qg.status}"
                     }
@@ -55,6 +60,7 @@ pipeline {
             }
         }
 
+        // ---------- OWASP ----------
         stage('OWASP Dependency Check') {
             steps {
                 dependencyCheck(
@@ -69,25 +75,45 @@ pipeline {
             }
         }
 
+        // ---------- TRIVY FS ----------
         stage('Trivy File Scan') {
             steps {
                 sh 'trivy fs --severity HIGH,CRITICAL bookmyshow-app'
             }
         }
 
-        stage('Docker Build & Push') {
+        // ---------- DOCKER BUILD ----------
+        stage('Docker Build') {
+            steps {
+                sh '''
+                echo "Building Docker Image..."
+                docker build -t $IMAGE -f bookmyshow-app/Dockerfile bookmyshow-app
+                '''
+            }
+        }
+
+        // ---------- TRIVY IMAGE SCAN ✅ ----------
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                echo "Scanning Docker Image..."
+                trivy image --severity HIGH,CRITICAL --exit-code 1 $IMAGE
+                '''
+            }
+        }
+
+        // ---------- PUSH IMAGE ----------
+        stage('Push Docker Image') {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'Docker-CRED', toolName: 'Docker') {
-                        sh '''
-                        docker build -t $IMAGE -f bookmyshow-app/Dockerfile bookmyshow-app
-                        docker push $IMAGE
-                        '''
+                        sh 'docker push $IMAGE'
                     }
                 }
             }
         }
 
+        // ---------- DEPLOY ----------
         stage('Deploy Container') {
             steps {
                 sh '''
