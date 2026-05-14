@@ -1,17 +1,24 @@
-# ---------- Build Stage ----------
+############################
+# BUILD STAGE
+############################
 FROM node:18 AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
+
 RUN npm install
 
 COPY . .
 
+# ✅ FIX OPENSSL ERROR
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
 RUN npm run build
 
-
-# ---------- Production Stage ----------
+############################
+# PRODUCTION STAGE
+############################
 FROM nginx:alpine
 
 RUN rm -rf /usr/share/nginx/html/*
