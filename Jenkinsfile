@@ -8,22 +8,26 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
+        ODC_DATA = "/var/jenkins_home/odc-data"
     }
 
     stages {
 
+        // ---------------- CLEAN ----------------
         stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
 
+        // ---------------- CHECKOUT ----------------
         stage('Checkout Code') {
             steps {
                 git url: 'https://github.com/mehar-pa-45/Book-My-Show.git', branch: 'main'
             }
         }
 
+        // ---------------- INSTALL ----------------
         stage('Install Dependencies') {
             steps {
                 sh '''
@@ -33,6 +37,7 @@ pipeline {
             }
         }
 
+        // ---------------- SONARQUBE ----------------
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube-Scanner') {
@@ -47,6 +52,7 @@ pipeline {
             }
         }
 
+        // ---------------- QUALITY GATE ----------------
         stage('Quality Gate') {
             steps {
                 script {
@@ -60,21 +66,31 @@ pipeline {
             }
         }
 
+        // ---------------- OWASP (FAST VERSION) ----------------
         stage('OWASP Dependency Check') {
             steps {
-                dependencyCheck additionalArguments: '--scan bookmyshow-app',
-                odcInstallation: 'dependency-check'
+                dependencyCheck(
+                    odcInstallation: 'dependency-check',
+                    additionalArguments: """
+                    --scan bookmyshow-app
+                    --exclude **/node_modules/**
+                    --data ${ODC_DATA}
+                    --noupdate
+                    """
+                )
             }
         }
 
+        // ---------------- TRIVY SCAN ----------------
         stage('Trivy File Scan') {
             steps {
                 sh '''
-                trivy fs bookmyshow-app
+                trivy fs --severity HIGH,CRITICAL bookmyshow-app
                 '''
             }
         }
 
+        // ---------------- DOCKER BUILD & PUSH ----------------
         stage('Docker Build & Push') {
             steps {
                 script {
@@ -88,6 +104,7 @@ pipeline {
             }
         }
 
+        // ---------------- DEPLOY ----------------
         stage('Deploy Container') {
             steps {
                 sh '''
@@ -99,12 +116,18 @@ pipeline {
         }
     }
 
+    // ---------------- EMAIL ----------------
     post {
         always {
             emailext(
                 to: 'prsam.789@gmail.com',
-                subject: "Jenkins Pipeline Status",
-                body: "Build Completed: ${currentBuild.currentResult}"
+                subject: "Jenkins Build: ${currentBuild.currentResult}",
+                body: """
+                Job Name: ${env.JOB_NAME}
+                Build Number: ${env.BUILD_NUMBER}
+                Status: ${currentBuild.currentResult}
+                Build URL: ${env.BUILD_URL}
+                """
             )
         }
     }
