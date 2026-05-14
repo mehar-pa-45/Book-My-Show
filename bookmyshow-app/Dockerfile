@@ -1,26 +1,23 @@
-# Use Node LTS image
-FROM node:18-alpine
+# ---------- Build Stage ----------
+FROM node:18 AS builder
 
-# Create app directory
 WORKDIR /app
 
-# Copy dependency files first (Docker cache optimization)
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
-
-# Fix file watching issue inside Docker (Chokidar)
-ENV CHOKIDAR_USEPOLLING=true
-
-# Fix OpenSSL issue
-ENV NODE_OPTIONS=--openssl-legacy-provider
-
-# Copy project files
 COPY . .
 
-# Expose application port
-EXPOSE 3000
+RUN npm run build
 
-# Start application
-CMD ["npm", "start"]
+
+# ---------- Production Stage ----------
+FROM nginx:alpine
+
+RUN rm -rf /usr/share/nginx/html/*
+
+COPY --from=builder /app/build /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
